@@ -1,0 +1,177 @@
+final code including all requiremnets
+
+
+#include <SPI.h>
+
+// ---------------- PIN CONFIG ----------------
+
+const int rowPins[4] = {6,7,8,9};
+const int colPins[4] = {2,3,4,5};
+
+const int ledPins[4] = {10,11,12,13};
+
+// DAC chip select
+const int CS = A0;
+
+
+// --------------- PARAMETERS -----------------
+
+const int debounceTime = 20;
+const int semitoneStep = 3;   // DAC step for 0.048V
+
+
+// --------------- VARIABLES ------------------
+
+int transpose = 0;
+int lastKey = -1;
+
+
+// --------------- DAC OUTPUT -----------------
+
+void writeDAC(byte value)
+{
+
+  digitalWrite(CS, LOW);
+
+  byte highByte = 0b00110000 | (value >> 4);
+  byte lowByte  = value << 4;
+
+  SPI.transfer(highByte);
+  SPI.transfer(lowByte);
+
+  digitalWrite(CS, HIGH);
+}
+
+
+// --------------- LED DISPLAY ----------------
+
+void showKey(int key)
+{
+
+  for(int i=0;i<4;i++)
+  digitalWrite(ledPins[i], (key >> i) & 1);
+
+}
+
+
+// --------------- MATRIX SCAN ----------------
+
+int scanMatrix()
+{
+
+  for(int r=3; r>=0; r--)   // bottom row priority
+  {
+
+    digitalWrite(rowPins[r], LOW);
+
+    for(int c=3; c>=0; c--) // rightmost column priority
+    {
+
+      if(digitalRead(colPins[c]) == LOW)
+      {
+
+        digitalWrite(rowPins[r], HIGH);
+
+        return r*4 + c;
+
+      }
+
+    }
+
+    digitalWrite(rowPins[r], HIGH);
+
+  }
+
+  return -1;
+
+}
+
+
+// --------------- SETUP ----------------------
+
+void setup()
+{
+
+  SPI.begin();
+
+  pinMode(CS, OUTPUT);
+  digitalWrite(CS, HIGH);
+
+
+  // rows
+
+  for(int r=0;r<4;r++)
+  {
+
+    pinMode(rowPins[r], OUTPUT);
+    digitalWrite(rowPins[r], HIGH);
+
+  }
+
+
+  // columns
+
+  for(int c=0;c<4;c++)
+  pinMode(colPins[c], INPUT_PULLUP);
+
+
+  // LEDs
+
+  for(int i=0;i<4;i++)
+  pinMode(ledPins[i], OUTPUT);
+
+}
+
+
+// --------------- MAIN LOOP ------------------
+
+void loop()
+{
+
+  int key = scanMatrix();
+
+  if(key != -1 && key != lastKey)
+  {
+
+    delay(debounceTime);
+
+    key = scanMatrix();
+
+    if(key != -1)
+    {
+
+      // TRANSPOSE KEY (example key 15)
+
+      if(key == 15)
+      {
+
+        transpose = !transpose;
+        return;
+
+      }
+
+
+      int musicalKey = key + (transpose * 12);
+
+      if(musicalKey > 24)
+      musicalKey = 24;
+
+
+      showKey(key);
+
+
+      byte dacValue = musicalKey * semitoneStep;
+
+      writeDAC(dacValue);
+
+
+      lastKey = key;
+
+    }
+
+  }
+
+  if(key == -1)
+  lastKey = -1;
+
+}
